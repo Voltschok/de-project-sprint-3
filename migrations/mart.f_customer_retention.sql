@@ -1,5 +1,4 @@
-drop table if exists mart.f_customer_retention;
-create table mart.f_customer_retention ( 
+create table if not exists mart.f_customer_retention ( 
 	new_customers_count bigint,
 	returning_customers_count bigint,
 	refunded_customer_count bigint,
@@ -8,11 +7,13 @@ create table mart.f_customer_retention (
 	item_id int,
 	new_customers_revenue numeric(14, 2),
 	returning_customers_revenue numeric(14, 2),
-	customers_refunded bigint
+	customers_refunded bigint, 
+	UNIQUE(period_id, item_id)
 );
 
+delete from mart.f_customer_retention mfr
+where mfr.period_id=DATE_PART('week','{{ds}}'::timestamp);
 
- 
 with temp1 as (select fsl.*,  dc.week_of_year,  
 case when fsl.payment_amount<0 then 'refunded' 
 	else 'shipped' end as status from mart.f_sales fsl
@@ -75,12 +76,10 @@ select  week_of_year, item_id, sum(c) as customers_refunded from customer_refund
  
 group by   week_of_year, item_id 
 
-),
-del (delete from mart.f_customer_retention mfr
-where mfr.period_id=DATE_PART('week',{{ds}}::timestamp);
+)
+
 
 INSERT INTO mart.f_customer_retention
-
 select  distinct  
 ncc.new_customers_count, 
 rcc.returning_customers_count, 
@@ -106,6 +105,5 @@ di.item_id=ncr.item_id
 left join returning_customers_revenue rcr on dcl.week_of_year=rcr.week_of_year and 
 di.item_id=rcr.item_id 
 left join customers_refunded2 crf on dcl.week_of_year=crf.week_of_year and 
-di.item_id=crf.item_id 
- 
-
+di.item_id=crf.item_id
+where  dcl.week_of_year= DATE_PART('week','{{ds}}'::timestamp); 

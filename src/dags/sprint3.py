@@ -80,6 +80,7 @@ def get_increment(date, ti):
 
 
 def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
+    
     increment_id = ti.xcom_pull(key='increment_id')
     s3_filename = f'https://storage.yandexcloud.net/s3-sprint3/cohort_{cohort}/{nickname}/project/{increment_id}/{filename}'
     print(s3_filename)
@@ -99,6 +100,11 @@ def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
 
     postgres_hook = PostgresHook(postgres_conn_id)
     engine = postgres_hook.get_sqlalchemy_engine()
+
+    sql_delete='''delete from staging.user_order_log as uol
+where uol.date_time::Date = '{date}'::Date;'''
+    postgres_hook.run(sql_delete.replace('{date}', date))
+
     row_count = df.to_sql(pg_table, engine, schema=pg_schema, if_exists='append', index=False)
     print(f'{row_count} rows was inserted')
 
@@ -134,18 +140,6 @@ with DAG(
         python_callable=get_increment,
         op_kwargs={'date': business_dt})
 
-    add_column_status  = PostgresOperator(
-        task_id="add_column_status",
-        postgres_conn_id=postgres_conn_id,
-        sql="sql/staging.add_column_status.sql"  
-    )
-    
-    delete_from_user_order_log = PostgresOperator(
-        task_id="delete_from_user_order_log",
-        postgres_conn_id=postgres_conn_id,
-        sql="sql/staging.delete_from_user_order_log.sql"
-    )
-
     upload_user_order_inc = PythonOperator(
         task_id='upload_user_order_inc',
         python_callable=upload_data_to_staging,
@@ -175,15 +169,19 @@ with DAG(
         sql="sql/mart.f_sales.sql",
         parameters={"date": {business_dt}}
     )
+    update_f_customer_retention = PostgresOperator(
+        task_id='update_f_customer_retention',
+        postgres_conn_id=postgres_conn_id,
+        sql="sql/mart.f_customer_retention.sql",
+        parameters={"date": {business_dt}}
+    )
 
     (
             generate_report
             >> get_report
             >> get_increment
-            >> add_column_status
-            >> delete_from_user_order_log 
             >> upload_user_order_inc
             >> [update_d_item_table, update_d_city_table, update_d_customer_table]
             >> update_f_sales
+            >> update_f_customer_retention
     )
-
