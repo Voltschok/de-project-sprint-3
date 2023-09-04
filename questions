@@ -1,8 +1,0 @@
-1. По витрине mart.f_customer_retention - не совсем понял, но попробовал добавить условие для выборки 
-where  dcl.week_of_year=DATE_PART('week','{{ds}}'::timestamp) и аналогично для удаления.
-
-2. По dag - убрал из задач добавление столбцы status, добавил задачу >> update_f_customer_retention.
-Но не совсем понял как  с помощью хука  добавить условие идемпотентности -
-можно просто прописать напрямую запрос в postgres_hook.run(sql=)   в функции upload_data_to_staging?
-
-
